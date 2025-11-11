@@ -21,24 +21,26 @@ except ImportError:
     pass
 
 # Import Flask application
-from app import app as application
+try:
+    from app import app as application
+    print("✅ Flask app imported successfully")
+except Exception as e:
+    print(f"❌ Failed to import Flask app: {e}")
+    import traceback
+    traceback.print_exc()
+    raise
 
-# Create tables on startup (only if they don't exist)
-with application.app_context():
-    try:
+# Create tables on startup - wrapped in try/except to not block startup
+try:
+    with application.app_context():
         from models import db
-        # Try to create all tables (handles missing DB gracefully)
         db.create_all()
-        
-        # Check if tables exist
-        from sqlalchemy import inspect
-        inspector = inspect(db.engine)
-        existing_tables = inspector.get_table_names()
-        print(f"✅ Database ready ({len(existing_tables)} tables exist)")
-    except Exception as e:
-        print(f"⚠️ Database error: {e}")
-        print("Note: SQLite resets on each deployment. Use PostgreSQL for production.")
+        print("✅ Database tables created/verified")
+except Exception as e:
+    print(f"⚠️ Database setup warning (app will still run): {e}")
+    # Don't crash - let the app start even if DB has issues
 
 # WSGI entry point for LiteSpeed
 if __name__ == '__main__':
     application.run()
+
