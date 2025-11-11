@@ -23,14 +23,24 @@ except ImportError:
 # Import Flask application
 from app import app as application
 
-# Create tables on startup
+# Create tables on startup (only if they don't exist)
 with application.app_context():
     try:
         from models import db
-        db.create_all()
-        print("Database tables initialized successfully")
+        # Check if tables exist before creating
+        from sqlalchemy import inspect
+        inspector = inspect(db.engine)
+        existing_tables = inspector.get_table_names()
+        
+        if not existing_tables:
+            db.create_all()
+            print("✅ Database tables initialized successfully")
+        else:
+            print(f"✅ Database ready ({len(existing_tables)} tables exist)")
     except Exception as e:
-        print(f"Warning: Could not initialize database tables: {e}")
+        # Silently handle if tables already exist
+        if "already exists" not in str(e):
+            print(f"⚠️ Database initialization note: {e}")
 
 # WSGI entry point for LiteSpeed
 if __name__ == '__main__':
