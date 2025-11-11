@@ -22,6 +22,10 @@ VIDEO_DIR = os.path.join(UPLOAD_DIR, "videos")
 THUMB_DIR = os.path.join(UPLOAD_DIR, "thumbnails")
 AVATAR_DIR = os.path.join(UPLOAD_DIR, "avatars")
 
+# Create upload directories if they don't exist
+for dir_path in [UPLOAD_DIR, VIDEO_DIR, THUMB_DIR, AVATAR_DIR, os.path.join(UPLOAD_DIR, "emojis")]:
+    os.makedirs(dir_path, exist_ok=True)
+
 app = Flask(__name__)
 app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "dev-secret")
 app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get("DATABASE_URL", f"sqlite:///{os.path.join(BASE_DIR,'cannaspot.db')}")
@@ -414,25 +418,36 @@ def logout():
 
 @app.route("/")
 def recent():
-    # Get GrowBot user ID (YouTube videos uploader)
-    bot = User.query.filter_by(username="GrowBot").first()
-    bot_id = bot.id if bot else None
-    
-    # Get uploaded videos (not from GrowBot) - show these first
-    uploaded_vids = Video.query.filter(Video.uploader_id != bot_id).order_by(Video.created_at.desc()).limit(12).all() if bot_id else []
-    
-    # Get YouTube videos (from GrowBot) - show after uploaded
-    youtube_vids = Video.query.filter_by(uploader_id=bot_id).order_by(Video.created_at.desc()).limit(12).all() if bot_id else []
-    
-    # Combine: uploaded first, then YouTube
-    vids = uploaded_vids + youtube_vids
-    
-    # Add like counts to each video
-    for v in vids:
-        v.like_count = VideoLike.query.filter_by(video_id=v.id).count()
-    
-    servers = Server.query.order_by(Server.name).all()
-    return render_template("recent.html", videos=vids, uploaded=uploaded_vids, youtube=youtube_vids, servers=servers, user=current_user())
+    try:
+        # Check if database is initialized
+        user_count = User.query.count()
+        if user_count == 0:
+            # No users, redirect to install
+            return redirect(url_for("install"))
+        
+        # Get GrowBot user ID (YouTube videos uploader)
+        bot = User.query.filter_by(username="GrowBot").first()
+        bot_id = bot.id if bot else None
+        
+        # Get uploaded videos (not from GrowBot) - show these first
+        uploaded_vids = Video.query.filter(Video.uploader_id != bot_id).order_by(Video.created_at.desc()).limit(12).all() if bot_id else []
+        
+        # Get YouTube videos (from GrowBot) - show after uploaded
+        youtube_vids = Video.query.filter_by(uploader_id=bot_id).order_by(Video.created_at.desc()).limit(12).all() if bot_id else []
+        
+        # Combine: uploaded first, then YouTube
+        vids = uploaded_vids + youtube_vids
+        
+        # Add like counts to each video
+        for v in vids:
+            v.like_count = VideoLike.query.filter_by(video_id=v.id).count()
+        
+        servers = Server.query.order_by(Server.name).all()
+        return render_template("recent.html", videos=vids, uploaded=uploaded_vids, youtube=youtube_vids, servers=servers, user=current_user())
+    except Exception as e:
+        # Database not initialized, redirect to install
+        print(f"Error loading home page: {e}")
+        return redirect(url_for("install"))
 
 @app.route("/watch/<int:vid>", methods=["GET", "POST"])
 def watch(vid):
